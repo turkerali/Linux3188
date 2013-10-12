@@ -454,24 +454,45 @@ static int rk_fb_io_enable(void)
 	return 0;
 }
 
-#if defined(CONFIG_LCDC0_RK3188)
-struct rk29fb_info lcdc0_screen_info = {
-	.prop           = EXTEND,       //extend display device
-       .lcd_info  = NULL,
-       .set_screen_info = set_lcd_info,
+//SAW -- MK908 uses LCDC0 as primary vs the code defaults of LCDC1 
+#if (defined(CONFIG_LCDC0_RK3188) && !defined(CONFIG_LCDC1_RK3188))
 
-};
-#endif
+ struct rk29fb_info lcdc0_screen_info = {
+	.prop		= PRMRY,
+	.io_init	= rk_fb_io_init,
+	.io_disable	= rk_fb_io_disable,
+	.io_enable	= rk_fb_io_enable,
+	.set_screen_info = set_lcd_info,
 
-#if defined(CONFIG_LCDC1_RK3188)
-struct rk29fb_info lcdc1_screen_info = {
-	.prop	   = PRMRY,		//primary display device
-	.io_init   = rk_fb_io_init,
-	.io_disable = rk_fb_io_disable,
-	.io_enable = rk_fb_io_enable,
+ };
+
+ struct rk29fb_info lcdc1_screen_info = {
+	.prop		= EXTEND,
+	.lcd_info	= NULL,
+	.set_screen_info = set_lcd_info,
+
+ };
+
+#else
+
+ #if defined(CONFIG_LCDC1_RK3188)
+  struct rk29fb_info lcdc1_screen_info = {
+	.prop	   	= PRMRY,	//primary display device
+	.io_init   	= rk_fb_io_init,
+	.io_disable 	= rk_fb_io_disable,
+	.io_enable 	= rk_fb_io_enable,
 	.set_screen_info = set_lcd_info,
 	
-};
+  };
+ 
+  struct rk29fb_info lcdc0_screen_info = {
+	.prop		= EXTEND,
+	.lcd_info	= NULL,
+	.set_screen_info = set_lcd_info,
+
+  };
+ #endif	
+
 #endif
 
 static struct resource resource_fb[] = {
@@ -922,7 +943,13 @@ static struct platform_device rk30_device_remotectl = {
 /*$_rbox_$_modify_$_huangzhibao_end$_20120508_$*/
 #ifdef CONFIG_RK30_PWM_REGULATOR
 static int pwm_voltage_map[] = {
-	800000,825000,850000, 875000,900000, 925000 ,950000, 975000,1000000, 1025000, 1050000, 1075000, 1100000, 1125000, 1150000, 1175000, 1200000, 1225000, 1250000, 1275000, 1300000, 1325000, 1350000,1375000
+#ifdef RK_PWM_VOLT_MAX_1450
+// SAW - Set max voltage from 1375000 to 1450000 for OC later
+	800000, 825000, 850000, 875000, 900000, 925000, 950000, 975000, 1000000, 1025000, 1050000, 1075000, 1100000, 1125000, 1150000, 1175000, 1200000, 1225000, 1250000, 1275000, 1300000, 1325000, 1350000, 1375000, 1400000, 1425000, 1450000
+#else
+	800000, 825000, 850000, 875000, 900000, 925000, 950000, 975000, 1000000, 1025000, 1050000, 1075000, 1100000, 1125000, 1150000, 1175000, 1200000, 1225000, 1250000, 1275000, 1300000, 1325000, 1350000, 1375000
+#endif
+
 };
 
 static struct regulator_consumer_supply pwm_dcdc1_consumers[] = {
@@ -955,7 +982,12 @@ static struct pwm_platform_data pwm_regulator_info[1] = {
 		.pwm_voltage = 1100000,
 		.suspend_voltage = 1000000,
 		.min_uV = 800000,
-		.max_uV	= 1375000,
+#ifdef RK_PWM_VOLT_MAX_1450
+//SAW -- max voltage setting - Sam321 
+		.max_uV	= 1450000,
+#else
+		.max_uV = 1375000,
+#endif
 		.coefficient = 575,	//57.5%
 		.pwm_voltage_map = pwm_voltage_map,
 		.init_data	= &pwm_regulator_init_dcdc[0],
@@ -979,23 +1011,60 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
     .type               = RFKILL_TYPE_BLUETOOTH,
 
     .poweron_gpio       = { // BT_REG_ON
-        .io             = RK30_PIN3_PD1, //RK30_PIN3_PC7,
+#ifdef CONFIG_RFKILL_RK_POWERON_PIN3_PD1
+        .io             = RK30_PIN3_PD1,
+#else
+        .io             = INVALID_GPIO, //SAW - RK30_PIN3_PD1, //RK30_PIN3_PC7,
+#endif
+        .io             = INVALID_GPIO, //SAW - RK30_PIN3_PD1, //RK30_PIN3_PC7,
         .enable         = GPIO_HIGH,
+	.iomux		= {
+	    .name	= "bt_poweron",
+#ifdef CONFIG_RFKILL_RK_POWERON_PIN3_PD1
+	    .fgpio      = GPIO3_D1,
+#else
+	    .fgpio      = GPIO3_C7,
+#endif
+        },
     },
 
     .reset_gpio         = { // BT_RST
-        .io             = INVALID_GPIO, // set io to INVALID_GPIO for disable it
+#ifdef CONFIG_RFKILL_RK_RESET_INVALID_GPIO
+        .io             = INVALID_GPIO,
+#else
+        .io             = RK30_PIN3_PD1, //SAW - INVALID_GPIO 
+#endif
         .enable         = GPIO_LOW,
-   }, 
+	.iomux		= {
+	    .name	= "bt_reset",
+	    .fgpio      = GPIO3_D1,
+	},
+    }, 
 
     .wake_gpio          = { // BT_WAKE, use to control bt's sleep and wakeup
-        .io             = RK30_PIN3_PC7, // set io to INVALID_GPIO for disable it
+#ifdef CONFIG_RFKILL_RK_WAKE_PIN3_PC7
+        .io             = RK30_PIN3_PC7,
+#else
+        .io             = RK30_PIN3_PC6, //SAW - RK30_PIN3_PC7, // set io to INVALID_GPIO for disable it
+#endif
         .enable         = GPIO_HIGH,
+	.iomux		= {
+            .name	= "bt_wake",
+#ifdef CONFIG_RFKILL_RK_WAKE_PIN3_PC7
+	    .fgpio	= GPIO3_C7,
+#else
+	    .fgpio	= GPIO3_C6,
+#endif
+  	},
     },
 
     .wake_host_irq      = { // BT_HOST_WAKE, for bt wakeup host when it is in deep sleep
         .gpio           = {
-            .io         = RK30_PIN3_PC6, // set io to INVALID_GPIO for disable it
+#ifdef CONFIG_RFKILL_RK_WAKE_HOST_PIN3_PC6
+            .io         = RK30_PIN3_PC6,
+#else
+            .io         = RK30_PIN3_PC7, //SAW - RK30_PIN3_PC6, // set io to INVALID_GPIO for disable it
+#endif
             .enable     = GPIO_LOW,      // set GPIO_LOW for falling, set 0 for rising
             .iomux      = {
                 .name   = NULL,
@@ -1170,7 +1239,12 @@ static struct platform_device rockchip_hdmi_audio = {
 static struct tcc_bt_platform_data tcc_bt_platdata = {
 
     .power_gpio   = { // ldoon
-        .io             =  RK30_PIN3_PC7,
+//SAW QX1 setting thanks to Leolas
+#ifdef CONFIG_TCC_BT_DEV_POWER_PIN3_PD1
+        .io             = RK30_PIN3_PD1,
+#else
+        .io             = RK30_PIN3_PC7,
+#endif
         .enable         = GPIO_HIGH,
         .iomux          = {
             .name       = NULL,
@@ -1272,7 +1346,12 @@ static int rk_platform_add_display_devices(void)
 //$_rbox_$_modify_$ zhengyang modified for box
 static struct rkdisplay_platform_data hdmi_data = {
 	.property 		= DISPLAY_MAIN,
+//SAW -- MK908 uses LCDC0 as default vs LCDC1 like in other devices
+#if (defined(CONFIG_LCDC0_RK3188) && !defined(CONFIG_LCDC1_RK3188))
+	.video_source 	= DISPLAY_SOURCE_LCDC0,
+#else
 	.video_source 	= DISPLAY_SOURCE_LCDC1,
+#endif
 	.io_pwr_pin 	= INVALID_GPIO,
 	.io_reset_pin 	= RK30_PIN3_PB2,
 };
@@ -1415,9 +1494,15 @@ static struct pmu_info  act8846_dcdc_info[] = {
 		#endif
 	},
 	{
-		.name          = "act_dcdc4",   //vccio
-		.min_uv          = 3300000,
+		.name          = "act_dcdc4",   //vccio 
+//SAW special voltage for QX1, from Leolas
+#ifdef CONFIG_ACT8846_DCDC4_30V
+		.min_uv		= 3000000,
+		.max_uv		= 3000000,
+#else
+		.min_uv         = 3300000,
 		.max_uv         = 3300000,
+#endif
 		#ifdef CONFIG_ACT8846_SUPPORT_RESET
 		.suspend_vol  =  3000000,
 		#else
@@ -1454,8 +1539,15 @@ static  struct pmu_info  act8846_ldo_info[] = {
 	},
 	{
 		.name          = "act_ldo6",   //vcc_jetta
-		.min_uv          = 3300000,
-		.max_uv         = 3300000,
+//SAW volt set via kernel config, default 3300000, mk908 and some others
+//need 1800000 to get wifi/bt working properly
+#ifdef CONFIG_ACT8846_LDO6_18V
+		.min_uv         = 1800000, 
+		.max_uv         = 1800000, 
+#else
+		.min_uv		= 3300000,
+		.max_uv		= 3300000,
+#endif
 	},
 	{
 		.name          = "act_ldo7",   //vcc18
@@ -2023,34 +2115,110 @@ static void __init rk30_reserve(void)
  * comments	: min arm/logic voltage
  */
 static struct cpufreq_frequency_table dvfs_arm_table[] = {
-
-        {.frequency = 312 * 1000,       .index = 900 * 1000},
-        {.frequency = 504 * 1000,       .index = 925 * 1000},
-        {.frequency = 816 * 1000,       .index = 1000 * 1000},
-        {.frequency = 1008 * 1000,      .index = 1075 * 1000},
-        {.frequency = 1200 * 1000,      .index = 1150 * 1000},
-        {.frequency = 1416 * 1000,      .index = 1250 * 1000},
-        {.frequency = 1608 * 1000,      .index = 1350 * 1000},
-
-
+#ifdef CONFIG_RK_CPU_312
+        {.frequency = 312 * 1000,       .index = CONFIG_RK_CPU_312_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_504
+        {.frequency = 504 * 1000,       .index = CONFIG_RK_CPU_504_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_816
+        {.frequency = 816 * 1000,       .index = CONFIG_RK_CPU_816_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_1008
+        {.frequency = 1008 * 1000,      .index = CONFIG_RK_CPU_1008_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_1200
+        {.frequency = 1200 * 1000,      .index = CONFIG_RK_CPU_1200_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_1416
+        {.frequency = 1416 * 1000,      .index = CONFIG_RK_CPU_1416_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_1608
+        {.frequency = 1608 * 1000,      .index = CONFIG_RK_CPU_1608_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_1704
+        {.frequency = 1704 * 1000,      .index = CONFIG_RK_CPU_1704_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_1800
+        {.frequency = 1800 * 1000,      .index = CONFIG_RK_CPU_1800_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_1896
+        {.frequency = 1896 * 1000,      .index = CONFIG_RK_CPU_1896_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_1920
+        {.frequency = 1920 * 1000,      .index = CONFIG_RK_CPU_1920_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_CPU_2016
+        {.frequency = 2016 * 1000,      .index = CONFIG_RK_CPU_2016_VOLT * 1000},
+#endif
 	{.frequency = CPUFREQ_TABLE_END},
 };
 
 static struct cpufreq_frequency_table dvfs_gpu_table[] = {
-	   {.frequency = 133 * 1000,       .index = 975 * 1000},
-       //{.frequency = 150 * 1000,       .index = 975 * 1000},
-       {.frequency = 200 * 1000,       .index = 1000 * 1000},  
-       {.frequency = 266 * 1000,       .index = 1025 * 1000},  
-       {.frequency = 300 * 1000,       .index = 1050 * 1000},  
-       {.frequency = 400 * 1000,       .index = 1100 * 1000},
-       {.frequency = 600 * 1000,       .index = 1250 * 1000},
+#ifdef CONFIG_RK_GPU_133
+	   {.frequency = 133 * 1000,       .index = CONFIG_RK_GPU_133_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_GPU_200
+       {.frequency = 200 * 1000,       .index = CONFIG_RK_GPU_200_VOLT * 1000},  
+#endif
+#ifdef CONFIG_RK_GPU_266
+       {.frequency = 266 * 1000,       .index = CONFIG_RK_GPU_266_VOLT * 1000},  
+#endif
+#ifdef CONFIG_RK_GPU_300
+       {.frequency = 300 * 1000,       .index = CONFIG_RK_GPU_300_VOLT * 1000},  
+#endif
+#ifdef CONFIG_RK_GPU_400
+       {.frequency = 400 * 1000,       .index = CONFIG_RK_GPU_400_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_GPU_600
+       {.frequency = 600 * 1000,       .index = CONFIG_RK_GPU_600_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_GPU_798
+       {.frequency = 798 * 1000,       .index = CONFIG_RK_GPU_798_VOLT * 1000},
+#endif
 	{.frequency = CPUFREQ_TABLE_END},
 };
 
 static struct cpufreq_frequency_table dvfs_ddr_table[] = {
-	//{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 950 * 1000},
-	{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1000 * 1000},
-	{.frequency = 360 * 1000 + DDR_FREQ_NORMAL,     .index = 1100 * 1000},
+	{.frequency = 400 * 1000 + DDR_FREQ_IDLE,       .index = 1000 * 1000},
+	{.frequency = 400 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
+	{.frequency = 400 * 1000 + DDR_FREQ_VIDEO,      .index = 1000 * 1000},
+#ifdef CONFIG_RK_DDR_300
+	{.frequency = 300 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_300_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_360
+	{.frequency = 360 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_360_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_400
+	{.frequency = 400 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_400_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_500
+	{.frequency = 500 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_500_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_536
+	{.frequency = 536 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_536_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_600
+	{.frequency = 600 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_600_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_640
+	{.frequency = 640 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_640_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_672
+	{.frequency = 672 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_672_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_700
+	{.frequency = 700 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_700_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_720
+	{.frequency = 720 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_720_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_768
+	{.frequency = 768 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_768_VOLT * 1000},
+#endif
+#ifdef CONFIG_RK_DDR_800
+	{.frequency = 800 * 1000 + DDR_FREQ_NORMAL,     .index = CONFIG_RK_DDR_800_VOLT * 1000},
+#endif
 	{.frequency = CPUFREQ_TABLE_END},
 };
 
