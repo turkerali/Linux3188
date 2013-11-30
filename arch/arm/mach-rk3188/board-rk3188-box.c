@@ -1016,7 +1016,6 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
 #else
         .io             = INVALID_GPIO, //SAW - RK30_PIN3_PD1, //RK30_PIN3_PC7,
 #endif
-        .io             = INVALID_GPIO, //SAW - RK30_PIN3_PD1, //RK30_PIN3_PC7,
         .enable         = GPIO_HIGH,
 	.iomux		= {
 	    .name	= "bt_poweron",
