@@ -352,8 +352,8 @@ static int rk3188_cpufreq_init_cpu0(struct cpufreq_policy *policy)
 	gpu_clk = clk_get(NULL, "gpu");
 	if (!IS_ERR(gpu_clk)) {
 		clk_enable_dvfs(gpu_clk);
-		if (gpu_is_mali400)
-			dvfs_clk_enable_limit(gpu_clk, 133000000, 600000000);
+//		if (gpu_is_mali400)
+//			dvfs_clk_enable_limit(gpu_clk, 133000000, 600000000);
 	}
 
 	ddr_clk = clk_get(NULL, "ddr");
